@@ -1,6 +1,5 @@
 name: Credit Risk MLOps Pipeline
 
-# Trigger this workflow every time code is pushed to the 'main' branch
 on:
   push:
     branches: [ "main" ]
@@ -10,25 +9,35 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    
+    # Securely inject your Kaggle credentials into the remote server
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
 
     steps:
-    # 1. Grab the code from your repository
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 2. Set up the exact Python environment
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
 
-    # 3. Install dependencies
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 4. Verify the Docker image builds successfully without crashing
+    - name: Fetch Data and Train Champion Model
+      run: |
+        # 1. Download the raw data directly from Kaggle
+        python src/download_data.py
+        
+        # 2. Run the orchestrator to train models and generate artifacts/best_model.pkl
+        python main.py
+
     - name: Build Production Docker Image
       run: |
+        # 3. Now Docker will find the newly generated model file!
         docker build -t credit-risk-api:latest .
