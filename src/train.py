@@ -3,6 +3,8 @@ import joblib
 import pandas as pd
 import numpy as np
 import shap
+import mlflow
+import mlflow.sklearn
 import warnings
 import optuna
 
@@ -196,7 +198,6 @@ def main_training_pipeline():
     run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val)
     
     study_rf, study_xgb, study_lgb = run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val)
-    
     final_model = select_champion(study_rf, study_xgb, study_lgb, scale_weight_val)
     
     champion_pipeline = Pipeline(steps=[
@@ -205,8 +206,38 @@ def main_training_pipeline():
     ])
     champion_pipeline.fit(X_train, y_train)
     
-    final_test_evaluation(champion_pipeline, X_test, y_test)
+    # ---------------------------------------------------------
+    # NEW: MLflow Experiment Tracking
+    # ---------------------------------------------------------
+    print("\n=============================================")
+    print("       STAGE 4: MLFLOW EXPERIMENT LOGGING    ")
+    print("=============================================")
     
+    # Set the name of the experiment project
+    mlflow.set_experiment("Credit_Risk_Optimization")
+    
+    # Start a tracking run
+    with mlflow.start_run(run_name="Champion_Model_Evaluation"):
+        # Calculate test metrics
+        y_probs = champion_pipeline.predict_proba(X_test)[:, 1]
+        y_preds = champion_pipeline.predict(X_test)
+        test_pr_auc, test_f2 = evaluate_performance(y_test, y_probs, y_preds)
+        
+        print(f"Unseen Test Set PR-AUC : {test_pr_auc:.4f}")
+        print(f"Unseen Test Set F2     : {test_f2:.4f}")
+
+        # Log the hyperparameters of the winning model
+        mlflow.log_params(final_model.get_params())
+        
+        # Log the final holdout metrics
+        mlflow.log_metric("test_pr_auc", test_pr_auc)
+        mlflow.log_metric("test_f2", test_f2)
+        
+        # Securely log the actual model binary inside MLflow
+        mlflow.sklearn.log_model(champion_pipeline, "production_pipeline")
+        print("Model, parameters, and metrics successfully logged to MLflow.")
+    
+    # Keep local save for your Docker container
     os.makedirs(config['paths']['artifacts_dir'], exist_ok=True)
     joblib.dump(champion_pipeline, os.path.join(config['paths']['artifacts_dir'], 'best_model.pkl'))
     
