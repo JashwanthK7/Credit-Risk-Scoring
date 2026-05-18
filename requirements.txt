@@ -1,0 +1,13 @@
+pandas
+numpy
+pyyaml
+scikit-learn
+xgboost
+lightgbm
+kaggle
+requests
+shap
+optuna
+fastapi 
+uvicorn 
+pydantic

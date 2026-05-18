@@ -1,0 +1,14 @@
+# Environments
+venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data and Models
+data/raw/
+*.zip
+*.csv
+artifacts/
+
+# OS generated files
+.DS_Store
