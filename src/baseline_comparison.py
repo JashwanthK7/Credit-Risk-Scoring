@@ -21,10 +21,10 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, preprocessor, name):
     pr_auc = auc(recall, precision)
     f2 = fbeta_score(y_test, y_preds, beta=2)
     
-    print(f"\n=== {name} Baseline Report ===")
+    print(f'\n=== {name} Baseline Report ===')
     print(classification_report(y_test, y_preds))
     
-    return {"Model": name, "PR-AUC": round(pr_auc, 4), "F2-Score": round(f2, 4)}
+    return {'Model': name, 'PR-AUC': round(pr_auc, 4), 'F2-Score': round(f2, 4)}
 
 def main():
     config = load_config()
@@ -32,9 +32,9 @@ def main():
     preprocessor = build_preprocessing_pipeline(config)
     
     baselines = {
-        "Logistic Regression (L2)": LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42),
-        "Decision Tree": DecisionTreeClassifier(class_weight='balanced', max_depth=8, random_state=42),
-        "Random Forest": RandomForestClassifier(class_weight='balanced', n_estimators=100, random_state=42)
+        'Logistic Regression (L2)': LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42),
+        'Decision Tree': DecisionTreeClassifier(class_weight='balanced', max_depth=8, random_state=42),
+        'Random Forest': RandomForestClassifier(class_weight='balanced', n_estimators=100, random_state=42)
     }
     
     results = []
@@ -42,10 +42,10 @@ def main():
         metrics = evaluate_model(model, X_train, y_train, X_test, y_test, preprocessor, name)
         results.append(metrics)
         
-    print("\n=============================================")
-    print("         BASELINE MODEL COMPARISON           ")
-    print("=============================================")
+    print('\n=============================================')
+    print('         BASELINE MODEL COMPARISON           ')
+    print('=============================================')
     print(pd.DataFrame(results).to_string(index=False))
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

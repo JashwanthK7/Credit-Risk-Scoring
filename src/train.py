@@ -39,9 +39,9 @@ def evaluate_performance(y_true, y_probs, y_preds):
     return round(pr_auc, 4), round(f2, 4)
 
 def run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val):
-    print("\n=============================================")
-    print("       STAGE 1: BASELINE TOURNAMENT (VAL SET)")
-    print("=============================================")
+    print('\n=============================================')
+    print('       STAGE 1: BASELINE TOURNAMENT (VAL SET)')
+    print('=============================================')
     
     baselines = {
         'Logistic Regression': LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42),
@@ -52,9 +52,9 @@ def run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val):
     }
     
     results = []
-    mlflow.set_experiment("Credit_Risk_Optimization")
+    mlflow.set_experiment('Credit_Risk_Optimization')
     for name, model in baselines.items():
-        with mlflow.start_run(run_name=f"Baseline_{name}", nested=True):
+        with mlflow.start_run(run_name=f'Baseline_{name}', nested=True):
             model.fit(X_train_proc, y_train)
             y_probs = model.predict_proba(X_val_proc)[:, 1]
             y_preds = model.predict(X_val_proc)
@@ -69,14 +69,14 @@ def run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val):
     print(results_df.to_string(index=False))
 
 def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val, config):
-    print("\n=============================================")
-    print("       STAGE 2: BAYESIAN HYPERPARAM TUNING   ")
-    print("=============================================")
+    print('\n=============================================')
+    print('       STAGE 2: BAYESIAN HYPERPARAM TUNING   ')
+    print('=============================================')
     
     spaces = config['tuning_spaces']
 
     def objective_rf(trial):
-        with mlflow.start_run(run_name=f"Optuna_RF_Trial_{trial.number}", nested=True):
+        with mlflow.start_run(run_name=f'Optuna_RF_Trial_{trial.number}', nested=True):
             params = {
                 'n_estimators': trial.suggest_int('n_estimators', spaces['rf']['n_estimators'][0], spaces['rf']['n_estimators'][1], step=100),
                 'max_depth': trial.suggest_int('max_depth', spaces['rf']['max_depth'][0], spaces['rf']['max_depth'][1]),
@@ -92,7 +92,7 @@ def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val
             return score
 
     def objective_xgb(trial):
-        with mlflow.start_run(run_name=f"Optuna_XGB_Trial_{trial.number}", nested=True):
+        with mlflow.start_run(run_name=f'Optuna_XGB_Trial_{trial.number}', nested=True):
             params = {
                 'n_estimators': trial.suggest_int('n_estimators', spaces['xgb']['n_estimators'][0], spaces['xgb']['n_estimators'][1], step=100),
                 'max_depth': trial.suggest_int('max_depth', spaces['xgb']['max_depth'][0], spaces['xgb']['max_depth'][1]),
@@ -109,7 +109,7 @@ def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val
             return score
 
     def objective_lgb(trial):
-        with mlflow.start_run(run_name=f"Optuna_LGB_Trial_{trial.number}", nested=True):
+        with mlflow.start_run(run_name=f'Optuna_LGB_Trial_{trial.number}', nested=True):
             params = {
                 'n_estimators': trial.suggest_int('n_estimators', spaces['lgb']['n_estimators'][0], spaces['lgb']['n_estimators'][1], step=100),
                 'max_depth': trial.suggest_int('max_depth', spaces['lgb']['max_depth'][0], spaces['lgb']['max_depth'][1]),
@@ -125,24 +125,24 @@ def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val
             mlflow.log_metric('val_pr_auc', score)
             return score
 
-    print("Optimizing Random Forest Space...")
+    print('Optimizing Random Forest Space...')
     study_rf = optuna.create_study(direction='maximize')
     study_rf.optimize(objective_rf, n_trials=5)
     
-    print("Optimizing XGBoost Space...")
+    print('Optimizing XGBoost Space...')
     study_xgb = optuna.create_study(direction='maximize')
     study_xgb.optimize(objective_xgb, n_trials=5)
     
-    print("Optimizing LightGBM Space...")
+    print('Optimizing LightGBM Space...')
     study_lgb = optuna.create_study(direction='maximize')
     study_lgb.optimize(objective_lgb, n_trials=5)
     
     return study_rf, study_xgb, study_lgb
 
 def select_champion(study_rf, study_xgb, study_lgb, scale_weight_val):
-    print("\n=============================================")
-    print("       STAGE 3: CHAMPION SELECTION LOGIC     ")
-    print("=============================================")
+    print('\n=============================================')
+    print('       STAGE 3: CHAMPION SELECTION LOGIC     ')
+    print('=============================================')
     
     best_boosting_score = max(study_xgb.best_value, study_lgb.best_value)
     rf_score = study_rf.best_value
@@ -151,7 +151,7 @@ def select_champion(study_rf, study_xgb, study_lgb, scale_weight_val):
     if rf_score >= (best_boosting_score - compliance_margin):
         winner_name = 'RandomForest'
         final_model = RandomForestClassifier(random_state=42, class_weight='balanced', **study_rf.best_params)
-        print(f">>>> Champion Selected: {winner_name} (Val PR-AUC: {rf_score:.4f})")
+        print(f'>>>> Champion Selected: {winner_name} (Val PR-AUC: {rf_score:.4f})')
     else:
         if study_xgb.best_value >= study_lgb.best_value:
             winner_name = 'XGBoost'
@@ -159,21 +159,21 @@ def select_champion(study_rf, study_xgb, study_lgb, scale_weight_val):
         else:
             winner_name = 'LightGBM'
             final_model = LGBMClassifier(random_state=42, verbose=-1, scale_pos_weight=scale_weight_val, **study_lgb.best_params)
-        print(f">>>> Champion Selected: {winner_name} (Val PR-AUC: {max(study_xgb.best_value, study_lgb.best_value):.4f})")
+        print(f'>>>> Champion Selected: {winner_name} (Val PR-AUC: {max(study_xgb.best_value, study_lgb.best_value):.4f})')
         
     return final_model
 
 def compute_model_explainability(champion_pipeline, X_test, preprocessor):
-    print("\n=============================================")
-    print("       STAGE 5: SHAP EXPLAINABILITY (TEST)   ")
-    print("=============================================")
+    print('\n=============================================')
+    print('       STAGE 5: SHAP EXPLAINABILITY (TEST)   ')
+    print('=============================================')
     
     estimator = champion_pipeline.named_steps['classifier']
     X_test_proc = preprocessor.transform(X_test)
     feature_names = get_feature_names(preprocessor)
     
     if feature_names is None:
-        feature_names = [f"Feature_{i}" for i in range(X_test_proc.shape[1])]
+        feature_names = [f'Feature_{i}' for i in range(X_test_proc.shape[1])]
         
     X_test_proc_df = pd.DataFrame(X_test_proc, columns=feature_names)
     
@@ -213,23 +213,23 @@ def main_training_pipeline():
     ])
     champion_pipeline.fit(X_train, y_train)
     
-    print("\n=============================================")
-    print("       STAGE 4: MLFLOW EXPERIMENT LOGGING    ")
-    print("=============================================")
+    print('\n=============================================')
+    print('       STAGE 4: MLFLOW EXPERIMENT LOGGING    ')
+    print('=============================================')
     
-    with mlflow.start_run(run_name="Champion_Model_Evaluation"):
+    with mlflow.start_run(run_name='Champion_Model_Evaluation'):
         y_probs = champion_pipeline.predict_proba(X_test)[:, 1]
         y_preds = champion_pipeline.predict(X_test)
         test_pr_auc, test_f2 = evaluate_performance(y_test, y_probs, y_preds)
         
-        print(f"Unseen Test Set PR-AUC : {test_pr_auc:.4f}")
-        print(f"Unseen Test Set F2     : {test_f2:.4f}")
+        print(f'Unseen Test Set PR-AUC : {test_pr_auc:.4f}')
+        print(f'Unseen Test Set F2     : {test_f2:.4f}')
 
         mlflow.log_params(final_model.get_params())
-        mlflow.log_metric("test_pr_auc", test_pr_auc)
-        mlflow.log_metric("test_f2", test_f2)
-        mlflow.sklearn.log_model(champion_pipeline, "production_pipeline")
-        print("Model, parameters, and metrics successfully logged to MLflow.")
+        mlflow.log_metric('test_pr_auc', test_pr_auc)
+        mlflow.log_metric('test_f2', test_f2)
+        mlflow.sklearn.log_model(champion_pipeline, 'production_pipeline')
+        print('Model, parameters, and metrics successfully logged to MLflow.')
     
     os.makedirs(config['paths']['artifacts_dir'], exist_ok=True)
     joblib.dump(champion_pipeline, os.path.join(config['paths']['artifacts_dir'], 'best_model.pkl'))

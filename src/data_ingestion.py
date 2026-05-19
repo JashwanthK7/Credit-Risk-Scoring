@@ -7,15 +7,15 @@ def load_config():
     with open('config/config.yaml', 'r') as f:
         return yaml.safe_load(f)
 
-def load_raw_dataset():
-    raw_path = 'data/raw/credit_risk_dataset.csv'
+def load_raw_dataset(config):
+    raw_path = config['data'].get('raw_path', 'data/raw/credit_risk_dataset.csv')
     if not os.path.exists(raw_path):
-        raise FileNotFoundError(f"Missing base dataset file at {raw_path}")
+        raise FileNotFoundError(f'Missing base dataset file at {raw_path}')
     return pd.read_csv(raw_path)
 
 def run_ingestion():
     config = load_config()
-    df = load_raw_dataset()
+    df = load_raw_dataset(config)
     
     X = df.drop(columns=[config['data']['target']])
     y = df[config['data']['target']]
@@ -39,7 +39,7 @@ def run_ingestion():
         random_state=config['data']['random_state']
     )
     
-    print(f"Data ingested. Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}")
+    print(f'Data ingested. Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}')
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 if __name__ == '__main__':

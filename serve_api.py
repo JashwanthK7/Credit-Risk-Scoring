@@ -20,11 +20,10 @@ if model_url and not os.path.exists(model_path):
     print('Downloading production model from remote registry...')
     urllib.request.urlretrieve(model_url, model_path)
 
-try:
-    production_pipeline = joblib.load(model_path)
-except Exception as e:
-    production_pipeline = None
-    print(f'Failed to load model artifact: {e}')
+if not os.path.exists(model_path):
+    raise RuntimeError('Model artifact missing. Deployment halted.')
+
+production_pipeline = joblib.load(model_path)
 
 API_KEY_NAME = 'X-API-Key'
 API_KEY = os.environ.get('CREDIT_RISK_API_KEY', 'default-dev-key-123')
@@ -67,9 +66,6 @@ def health_check():
 
 @app.post('/predict')
 def predict_risk(application: LoanApplication, api_key: str = Depends(verify_api_key)):
-    if production_pipeline is None:
-        raise HTTPException(status_code=500, detail='Model pipeline is not loaded.')
-        
     input_data = pd.DataFrame([application.model_dump()])
     
     try:
