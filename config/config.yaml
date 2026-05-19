@@ -21,3 +21,22 @@ features:
 
 paths:
   artifacts_dir: artifacts
+
+business_logic:
+  compliance_threshold: 0.40
+
+tuning_spaces:
+  rf:
+    n_estimators: [100, 300]
+    max_depth: [10, 20]
+    min_samples_leaf: [2, 10]
+  xgb:
+    n_estimators: [100, 300]
+    max_depth: [4, 8]
+    learning_rate: [0.01, 0.2]
+    subsample: [0.7, 1.0]
+  lgb:
+    n_estimators: [100, 300]
+    max_depth: [4, 8]
+    num_leaves: [15, 63]
+    learning_rate: [0.01, 0.2]

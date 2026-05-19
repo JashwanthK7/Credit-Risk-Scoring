@@ -52,73 +52,90 @@ def run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val):
     }
     
     results = []
+    mlflow.set_experiment("Credit_Risk_Optimization")
     for name, model in baselines.items():
-        model.fit(X_train_proc, y_train)
-        y_probs = model.predict_proba(X_val_proc)[:, 1]
-        y_preds = model.predict(X_val_proc)
-        pr_auc, f2 = evaluate_performance(y_val, y_probs, y_preds)
-        results.append({'Model': name, 'Val PR-AUC': pr_auc, 'Val F2-Score': f2})
+        with mlflow.start_run(run_name=f"Baseline_{name}", nested=True):
+            model.fit(X_train_proc, y_train)
+            y_probs = model.predict_proba(X_val_proc)[:, 1]
+            y_preds = model.predict(X_val_proc)
+            pr_auc, f2 = evaluate_performance(y_val, y_probs, y_preds)
+            results.append({'Model': name, 'Val PR-AUC': pr_auc, 'Val F2-Score': f2})
+            
+            mlflow.log_param('model_type', name)
+            mlflow.log_metric('val_pr_auc', pr_auc)
+            mlflow.log_metric('val_f2_score', f2)
         
     results_df = pd.DataFrame(results).sort_values(by='Val PR-AUC', ascending=False)
     print(results_df.to_string(index=False))
 
-def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val):
+def run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val, config):
     print("\n=============================================")
     print("       STAGE 2: BAYESIAN HYPERPARAM TUNING   ")
     print("=============================================")
     
+    spaces = config['tuning_spaces']
+
     def objective_rf(trial):
-        params = {
-            'n_estimators': trial.suggest_int('n_estimators', 100, 300, step=100),
-            'max_depth': trial.suggest_int('max_depth', 10, 20),
-            'min_samples_leaf': trial.suggest_int('min_samples_leaf', 2, 10)
-        }
-        model = RandomForestClassifier(random_state=42, class_weight='balanced', **params)
-        model.fit(X_train_proc, y_train)
-        probs = model.predict_proba(X_val_proc)[:, 1]
-        precision, recall, _ = precision_recall_curve(y_val, probs)
-        return auc(recall, precision)
+        with mlflow.start_run(run_name=f"Optuna_RF_Trial_{trial.number}", nested=True):
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', spaces['rf']['n_estimators'][0], spaces['rf']['n_estimators'][1], step=100),
+                'max_depth': trial.suggest_int('max_depth', spaces['rf']['max_depth'][0], spaces['rf']['max_depth'][1]),
+                'min_samples_leaf': trial.suggest_int('min_samples_leaf', spaces['rf']['min_samples_leaf'][0], spaces['rf']['min_samples_leaf'][1])
+            }
+            model = RandomForestClassifier(random_state=42, class_weight='balanced', **params)
+            model.fit(X_train_proc, y_train)
+            probs = model.predict_proba(X_val_proc)[:, 1]
+            precision, recall, _ = precision_recall_curve(y_val, probs)
+            score = auc(recall, precision)
+            mlflow.log_params(params)
+            mlflow.log_metric('val_pr_auc', score)
+            return score
 
     def objective_xgb(trial):
-        params = {
-            'n_estimators': trial.suggest_int('n_estimators', 100, 300, step=100),
-            'max_depth': trial.suggest_int('max_depth', 4, 8),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2, log=True),
-            'subsample': trial.suggest_float('subsample', 0.7, 1.0)
-        }
-        model = XGBClassifier(random_state=42, eval_metric='logloss', scale_pos_weight=scale_weight_val, **params)
-        model.fit(X_train_proc, y_train)
-        probs = model.predict_proba(X_val_proc)[:, 1]
-        precision, recall, _ = precision_recall_curve(y_val, probs)
-        return auc(recall, precision)
+        with mlflow.start_run(run_name=f"Optuna_XGB_Trial_{trial.number}", nested=True):
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', spaces['xgb']['n_estimators'][0], spaces['xgb']['n_estimators'][1], step=100),
+                'max_depth': trial.suggest_int('max_depth', spaces['xgb']['max_depth'][0], spaces['xgb']['max_depth'][1]),
+                'learning_rate': trial.suggest_float('learning_rate', spaces['xgb']['learning_rate'][0], spaces['xgb']['learning_rate'][1], log=True),
+                'subsample': trial.suggest_float('subsample', spaces['xgb']['subsample'][0], spaces['xgb']['subsample'][1])
+            }
+            model = XGBClassifier(random_state=42, eval_metric='logloss', scale_pos_weight=scale_weight_val, **params)
+            model.fit(X_train_proc, y_train)
+            probs = model.predict_proba(X_val_proc)[:, 1]
+            precision, recall, _ = precision_recall_curve(y_val, probs)
+            score = auc(recall, precision)
+            mlflow.log_params(params)
+            mlflow.log_metric('val_pr_auc', score)
+            return score
 
     def objective_lgb(trial):
-        params = {
-            'n_estimators': trial.suggest_int('n_estimators', 100, 300, step=100),
-            'max_depth': trial.suggest_int('max_depth', 4, 8),
-            'num_leaves': trial.suggest_int('num_leaves', 15, 63),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2, log=True)
-        }
-        model = LGBMClassifier(random_state=42, verbose=-1, scale_pos_weight=scale_weight_val, **params)
-        model.fit(X_train_proc, y_train)
-        probs = model.predict_proba(X_val_proc)[:, 1]
-        precision, recall, _ = precision_recall_curve(y_val, probs)
-        return auc(recall, precision)
+        with mlflow.start_run(run_name=f"Optuna_LGB_Trial_{trial.number}", nested=True):
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', spaces['lgb']['n_estimators'][0], spaces['lgb']['n_estimators'][1], step=100),
+                'max_depth': trial.suggest_int('max_depth', spaces['lgb']['max_depth'][0], spaces['lgb']['max_depth'][1]),
+                'num_leaves': trial.suggest_int('num_leaves', spaces['lgb']['num_leaves'][0], spaces['lgb']['num_leaves'][1]),
+                'learning_rate': trial.suggest_float('learning_rate', spaces['lgb']['learning_rate'][0], spaces['lgb']['learning_rate'][1], log=True)
+            }
+            model = LGBMClassifier(random_state=42, verbose=-1, scale_pos_weight=scale_weight_val, **params)
+            model.fit(X_train_proc, y_train)
+            probs = model.predict_proba(X_val_proc)[:, 1]
+            precision, recall, _ = precision_recall_curve(y_val, probs)
+            score = auc(recall, precision)
+            mlflow.log_params(params)
+            mlflow.log_metric('val_pr_auc', score)
+            return score
 
     print("Optimizing Random Forest Space...")
     study_rf = optuna.create_study(direction='maximize')
     study_rf.optimize(objective_rf, n_trials=5)
-    print(f"  Best RF Val PR-AUC: {study_rf.best_value:.4f}")
     
     print("Optimizing XGBoost Space...")
     study_xgb = optuna.create_study(direction='maximize')
     study_xgb.optimize(objective_xgb, n_trials=5)
-    print(f"  Best XGB Val PR-AUC: {study_xgb.best_value:.4f}")
     
     print("Optimizing LightGBM Space...")
     study_lgb = optuna.create_study(direction='maximize')
     study_lgb.optimize(objective_lgb, n_trials=5)
-    print(f"  Best LGBM Val PR-AUC: {study_lgb.best_value:.4f}")
     
     return study_rf, study_xgb, study_lgb
 
@@ -145,16 +162,6 @@ def select_champion(study_rf, study_xgb, study_lgb, scale_weight_val):
         print(f">>>> Champion Selected: {winner_name} (Val PR-AUC: {max(study_xgb.best_value, study_lgb.best_value):.4f})")
         
     return final_model
-
-def final_test_evaluation(champion_pipeline, X_test, y_test):
-    print("\n=============================================")
-    print("       STAGE 4: HOLDOUT TEST EVALUATION      ")
-    print("=============================================")
-    y_probs = champion_pipeline.predict_proba(X_test)[:, 1]
-    y_preds = champion_pipeline.predict(X_test)
-    test_pr_auc, test_f2 = evaluate_performance(y_test, y_probs, y_preds)
-    print(f"Unseen Test Set PR-AUC : {test_pr_auc:.4f}")
-    print(f"Unseen Test Set F2     : {test_f2:.4f}")
 
 def compute_model_explainability(champion_pipeline, X_test, preprocessor):
     print("\n=============================================")
@@ -197,7 +204,7 @@ def main_training_pipeline():
     
     run_baselines(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val)
     
-    study_rf, study_xgb, study_lgb = run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val)
+    study_rf, study_xgb, study_lgb = run_optuna_tuning(X_train_proc, X_val_proc, y_train, y_val, scale_weight_val, config)
     final_model = select_champion(study_rf, study_xgb, study_lgb, scale_weight_val)
     
     champion_pipeline = Pipeline(steps=[
@@ -206,19 +213,11 @@ def main_training_pipeline():
     ])
     champion_pipeline.fit(X_train, y_train)
     
-    # ---------------------------------------------------------
-    # NEW: MLflow Experiment Tracking
-    # ---------------------------------------------------------
     print("\n=============================================")
     print("       STAGE 4: MLFLOW EXPERIMENT LOGGING    ")
     print("=============================================")
     
-    # Set the name of the experiment project
-    mlflow.set_experiment("Credit_Risk_Optimization")
-    
-    # Start a tracking run
     with mlflow.start_run(run_name="Champion_Model_Evaluation"):
-        # Calculate test metrics
         y_probs = champion_pipeline.predict_proba(X_test)[:, 1]
         y_preds = champion_pipeline.predict(X_test)
         test_pr_auc, test_f2 = evaluate_performance(y_test, y_probs, y_preds)
@@ -226,18 +225,12 @@ def main_training_pipeline():
         print(f"Unseen Test Set PR-AUC : {test_pr_auc:.4f}")
         print(f"Unseen Test Set F2     : {test_f2:.4f}")
 
-        # Log the hyperparameters of the winning model
         mlflow.log_params(final_model.get_params())
-        
-        # Log the final holdout metrics
         mlflow.log_metric("test_pr_auc", test_pr_auc)
         mlflow.log_metric("test_f2", test_f2)
-        
-        # Securely log the actual model binary inside MLflow
         mlflow.sklearn.log_model(champion_pipeline, "production_pipeline")
         print("Model, parameters, and metrics successfully logged to MLflow.")
     
-    # Keep local save for your Docker container
     os.makedirs(config['paths']['artifacts_dir'], exist_ok=True)
     joblib.dump(champion_pipeline, os.path.join(config['paths']['artifacts_dir'], 'best_model.pkl'))
     

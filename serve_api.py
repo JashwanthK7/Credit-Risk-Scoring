@@ -1,9 +1,14 @@
 import joblib
 import pandas as pd
+import yaml
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-# Load the production artifact on startup
+with open('config/config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+compliance_threshold = config['business_logic']['compliance_threshold']
+
 model_path = 'artifacts/best_model.pkl'
 try:
     production_pipeline = joblib.load(model_path)
@@ -11,7 +16,6 @@ except Exception as e:
     production_pipeline = None
     print(f"Failed to load model artifact: {e}")
 
-# Define the strict input schema using Pydantic
 class LoanApplication(BaseModel):
     person_age: int = Field(..., gt=17, lt=100, description='Applicant age in years')
     person_income: int = Field(..., gt=0, description='Annual income in dollars')
@@ -27,6 +31,14 @@ class LoanApplication(BaseModel):
 
 app = FastAPI(title='Credit Risk Scoring API', version='1.0')
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get('/')
 def health_check():
     return {"status": "Online", "message": "Credit Risk API is actively running."}
@@ -36,15 +48,10 @@ def predict_risk(application: LoanApplication):
     if production_pipeline is None:
         raise HTTPException(status_code=500, detail='Model pipeline is not loaded.')
         
-    # Convert validated Pydantic object to a single row DataFrame
     input_data = pd.DataFrame([application.model_dump()])
     
     try:
-        # Extract prediction probabilities
         risk_probability = production_pipeline.predict_proba(input_data)[0, 1]
-        
-        # Apply compliance threshold logic
-        compliance_threshold = 0.40
         status = 'REJECTED' if risk_probability >= compliance_threshold else 'APPROVED'
         
         return {
@@ -56,6 +63,5 @@ def predict_risk(application: LoanApplication):
         raise HTTPException(status_code=400, detail=f"Prediction error: {str(e)}")
 
 if __name__ == '__main__':
-    # pyrefly: ignore [missing-import]
     import uvicorn
     uvicorn.run(app, host='0.0.0.0', port=8000)

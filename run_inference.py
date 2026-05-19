@@ -2,8 +2,13 @@ import os
 import joblib
 import pandas as pd
 import numpy as np
+import yaml
 
 def predict_online_loan_application():
+    with open('config/config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+    compliance_threshold = config['business_logic']['compliance_threshold']
+
     model_path = "artifacts/best_model.pkl"
     
     if not os.path.exists(model_path):
@@ -12,11 +17,10 @@ def predict_online_loan_application():
     print("Loading production serialized champion pipeline...")
     production_pipeline = joblib.load(model_path)
     
-    # Simulate an incoming application stream (contains missing fields to test stability)
     incoming_data = pd.DataFrame([{
         "person_age": 28,
         "person_income": 55000,
-        "person_emp_length": np.nan,    # Missing entry test
+        "person_emp_length": np.nan,
         "loan_amnt": 12000,
         "loan_int_rate": 11.5,
         "loan_percent_income": 0.22,
@@ -28,18 +32,13 @@ def predict_online_loan_application():
     }])
     
     print("\nProcessing streaming transaction payload...")
-    
-    # Extract prediction probability matrices
     risk_probability = production_pipeline.predict_proba(incoming_data)[0, 1]
-    binary_decision = production_pipeline.predict(incoming_data)[0]
     
     print("\n=============================================")
     print("        PRODUCTION INFERENCE REPORT          ")
     print("=============================================")
     print(f"Calculated Default Probability : {risk_probability * 100:.2f}%")
     
-    # Establish a risk threshold matching compliance constraints
-    compliance_threshold = 0.40
     if risk_probability >= compliance_threshold:
         print("Final Underwriting Status      : REJECTED (High Credit Risk Profile)")
     else:

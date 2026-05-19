@@ -2,15 +2,14 @@ name: Credit Risk MLOps Pipeline
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
+  train-model:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
-    # Securely inject your Kaggle credentials into the remote server
     env:
       KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
       KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
@@ -22,7 +21,7 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
+        python-version: 3.11
 
     - name: Install Dependencies
       run: |
@@ -31,13 +30,31 @@ jobs:
 
     - name: Fetch Data and Train Champion Model
       run: |
-        # 1. Download the raw data directly from Kaggle
         python src/download_data.py
-        
-        # 2. Run the orchestrator to train models and generate artifacts/best_model.pkl
         python main.py
 
-    - name: Build Production Docker Image
+    - name: Upload Model Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: best_model
+        path: artifacts/best_model.pkl
+
+  build-deploy-api:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Download Model Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: best_model
+        path: artifacts/
+      continue-on-error: true
+
+    - name: Build and Push Production Docker Image
       run: |
-        # 3. Now Docker will find the newly generated model file!
-        docker build -t credit-risk-api:latest .
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        docker build -t myregistry/credit-risk-api:latest .
+        docker push myregistry/credit-risk-api:latest
