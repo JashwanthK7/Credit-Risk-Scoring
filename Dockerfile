@@ -11,7 +11,6 @@ RUN pip install --no-cache-dir -r api_requirements.txt
 
 COPY config/ ./config/
 COPY src/ ./src/
-COPY artifacts/best_model.pkl ./artifacts/
 COPY serve_api.py .
 
 EXPOSE 8000

@@ -19,6 +19,9 @@ function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const API_KEY = process.env.REACT_APP_API_KEY || 'default-dev-key-123';
+
   const parameterGuide = {
     Age: 'Applicant age in years. Must be at least 18.',
     Annual_Income: 'Total yearly income in dollars.',
@@ -47,7 +50,9 @@ function App() {
     setResult(null);
 
     try {
-      const response = await axios.post('http://localhost:8000/predict', formData);
+      const response = await axios.post(`${API_URL}/predict`, formData, {
+        headers: { 'X-API-Key': API_KEY }
+      });
       setResult(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'An error occurred while fetching the prediction.');
@@ -143,7 +148,7 @@ function App() {
         <h3>Parameter Guide</h3>
         <ul style={{ listStyleType: 'none', padding: 0 }}>
           {Object.entries(parameterGuide).map(([key, desc]) => (
-            <li key={key} className="guide-text" style={{ marginBottom: '15px', lineHeight: '1.4' }}>
+            <li key={key} className='guide-text' style={{ marginBottom: '15px', lineHeight: '1.4' }}>
               <strong>{key.replace(/_/g, ' ')}:</strong> <br /> {desc}
             </li>
           ))}
