@@ -2,12 +2,11 @@ name: Credit Risk MLOps Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   train-model:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
     env:
@@ -21,7 +20,7 @@ jobs:
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: 3.11
+        python-version: "3.11"
 
     - name: Install Dependencies
       run: |
@@ -40,6 +39,7 @@ jobs:
         path: artifacts/best_model.pkl
 
   build-deploy-api:
+    needs: train-model
     runs-on: ubuntu-latest
     
     steps:
@@ -51,10 +51,9 @@ jobs:
       with:
         name: best_model
         path: artifacts/
-      continue-on-error: true
 
     - name: Build and Push Production Docker Image
       run: |
-        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-        docker build -t myregistry/credit-risk-api:latest .
-        docker push myregistry/credit-risk-api:latest
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest .
+        docker push ${{ secrets.DOCKER_USERNAME }}/credit-risk-api:latest
